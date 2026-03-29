@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- ส่วน Model ด้านล่างนี้เหมือนเดิมทั้งหมด ---
+model Store {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  ownerId     String
+  products    Product[]
+  orders      Order[]
+  inventory   Inventory[]
+  createdAt   DateTime @default(now())
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  isShared    Boolean  @default(false)
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id])
+  inventory   Inventory[]
+  orderItems  OrderItem[]
+}
+
+model Inventory {
+  id         String   @id @default(cuid())
+  storeId    String
+  productId  String
+  quantity   Int      @default(0)
+  store      Store    @relation(fields: [storeId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id])
+
+  @@unique([storeId, productId])
+}
+
+model Affiliate {
+  id           String   @id @default(cuid())
+  refCode      String   @unique
+  commission   Float    @default(0.05)
+  orders       Order[]
+}
+
+model Order {
+  id           String   @id @default(cuid())
+  storeId      String
+  store        Store    @relation(fields: [storeId], references: [id])
+  totalAmount  Float
+  status       String   @default("PENDING")
+  affiliateId  String?
+  affiliate    Affiliate? @relation(fields: [affiliateId], references: [id])
+  items        OrderItem[]
+  createdAt    DateTime @default(now())
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+}
