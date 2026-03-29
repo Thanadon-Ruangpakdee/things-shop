@@ -15,7 +15,7 @@ export default function AddProductPage() {
         
         <div>
           <label className="block text-sm font-medium text-zinc-700 mb-2">ชื่อสินค้า</label>
-          <input type="text" name="name" required placeholder="เช่น พอตใช้แล้วทิ้ง รุ่น..." className="w-full p-3 border rounded-lg" />
+          <input type="text" name="name" required placeholder="ชื่อสินค้า" className="w-full p-3 border rounded-lg" />
         </div>
 
         <div className="grid grid-cols-2 gap-6">
@@ -40,7 +40,7 @@ export default function AddProductPage() {
           </label>
         </div>
 
-        <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700">
+        <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700">j
           บันทึกสินค้า
         </button>
       </form>

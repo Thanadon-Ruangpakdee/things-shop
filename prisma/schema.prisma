@@ -3,62 +3,69 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // <-- เพิ่มบรรทัดนี้ให้ Prisma ใช้ตอน Push
 }
 
-// --- ส่วน Model ด้านล่างนี้เหมือนเดิมทั้งหมด ---
 model Store {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  ownerId     String
-  products    Product[]
-  orders      Order[]
-  inventory   Inventory[]
-  createdAt   DateTime @default(now())
+  id        String      @id @default(cuid())
+  name      String
+  slug      String      @unique
+  ownerId   String
+  products  Product[]
+  orders    Order[]
+  inventory Inventory[]
+  affiliates Affiliate[] // <-- เพิ่มบรรทัดนี้: ให้รู้ว่าร้านนี้สร้างลิงก์ Affiliate อะไรไปบ้าง
+  createdAt DateTime    @default(now())
 }
 
 model Product {
-  id          String   @id @default(cuid())
+  id          String      @id @default(cuid())
   name        String
   description String?
   price       Float
-  isShared    Boolean  @default(false)
+  isShared    Boolean     @default(false)
   storeId     String
-  store       Store    @relation(fields: [storeId], references: [id])
+  store       Store       @relation(fields: [storeId], references: [id])
   inventory   Inventory[]
   orderItems  OrderItem[]
+  affiliates  Affiliate[] // <-- เพิ่มบรรทัดนี้: ให้รู้ว่าสินค้านี้มีใครเอาไปทำ Affiliate บ้าง
 }
 
 model Inventory {
-  id         String   @id @default(cuid())
-  storeId    String
-  productId  String
-  quantity   Int      @default(0)
-  store      Store    @relation(fields: [storeId], references: [id])
-  product    Product  @relation(fields: [productId], references: [id])
+  id        String   @id @default(cuid())
+  storeId   String
+  productId String
+  quantity  Int      @default(0)
+  store     Store    @relation(fields: [storeId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
 
   @@unique([storeId, productId])
 }
 
 model Affiliate {
-  id           String   @id @default(cuid())
-  refCode      String   @unique
-  commission   Float    @default(0.05)
-  orders       Order[]
+  id         String   @id @default(cuid())
+  storeId    String   // <-- เพิ่ม: ไอดีร้านคนที่เอาไปโปรโมท
+  productId  String   // <-- เพิ่ม: ไอดีสินค้าที่เอาไปโปรโมท
+  refCode    String   @unique
+  commission Float    @default(0.05)
+  
+  store      Store    @relation(fields: [storeId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id])
+  orders     Order[]
 }
 
 model Order {
-  id           String   @id @default(cuid())
-  storeId      String
-  store        Store    @relation(fields: [storeId], references: [id])
-  totalAmount  Float
-  status       String   @default("PENDING")
-  affiliateId  String?
-  affiliate    Affiliate? @relation(fields: [affiliateId], references: [id])
-  items        OrderItem[]
-  createdAt    DateTime @default(now())
+  id          String      @id @default(cuid())
+  storeId     String
+  store       Store       @relation(fields: [storeId], references: [id])
+  totalAmount Float
+  status      String      @default("PENDING")
+  affiliateId String?
+  affiliate   Affiliate?  @relation(fields: [affiliateId], references: [id])
+  items       OrderItem[]
+  createdAt   DateTime    @default(now())
 }
 
 model OrderItem {

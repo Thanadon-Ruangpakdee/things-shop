@@ -68,3 +68,37 @@ export async function addProduct(formData: FormData) {
   revalidatePath('/dashboard')
   redirect('/dashboard')
 }
+
+// ==========================================
+// ฟังก์ชัน 3: สร้างลิงก์ Affiliate (นำไปขาย)
+// ==========================================
+export async function createAffiliate(formData: FormData) {
+  const { userId } = await auth()
+  if (!userId) throw new Error("Unauthorized")
+
+  // 1. หาร้านของเรา (คนที่จะเอาไปโปรโมท)
+  const myStore = await prisma.store.findFirst({
+    where: { ownerId: userId }
+  })
+  if (!myStore) throw new Error("Store not found")
+
+  // 2. รับ ID สินค้าจากปุ่มที่กด
+  const productId = formData.get('productId') as string
+
+  // 3. สร้างรหัสอ้างอิง (Ref Code) แบบไม่ซ้ำใคร (เอาชื่อร้านเรา + ตัวเลขสุ่ม)
+  const randomStr = Math.random().toString(36).substring(2, 7)
+  const refCode = `${myStore.slug}-${randomStr}`
+
+  // 4. บันทึกลงตาราง Affiliate
+  await prisma.affiliate.create({
+    data: {
+      storeId: myStore.id,     // ร้านที่นำไปโปรโมท
+      productId: productId,    // สินค้าที่จะโปรโมท
+      refCode: refCode         // รหัสเฉพาะตัว
+    }
+  })
+
+  // 5. สร้างเสร็จให้เด้งกลับไปหน้า Dashboard เพื่อดูลิงก์
+  revalidatePath('/dashboard')
+  redirect('/dashboard')
+}
