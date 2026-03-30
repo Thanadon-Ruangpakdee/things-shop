@@ -102,3 +102,85 @@ export async function createAffiliate(formData: FormData) {
   revalidatePath('/dashboard')
   redirect('/dashboard')
 }
+// ==========================================
+// ฟังก์ชัน 4: สร้างคำสั่งซื้อ (เมื่อลูกค้ากดสั่งซื้อหน้าเว็บ)
+// ==========================================
+export async function createOrder(formData: FormData) {
+  const productId = formData.get('productId') as string
+  const refCode = formData.get('refCode') as string
+
+  // 1. ดึงข้อมูลสินค้า
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    include: { inventory: true }
+  })
+  if (!product) throw new Error("Product not found")
+
+  // 2. หาว่าลิงก์นี้เป็นของใคร (ถ้ามีการแนบ refCode มา)
+  let affiliateId = null
+  if (refCode) {
+    const affiliate = await prisma.affiliate.findUnique({
+      where: { refCode: refCode }
+    })
+    if (affiliate) {
+      affiliateId = affiliate.id
+    }
+  }
+
+  // 3. สร้างคำสั่งซื้อและตัดสต็อกพร้อมกัน
+  await prisma.$transaction(async (tx) => {
+    // 3.1 สร้างออเดอร์
+    await tx.order.create({
+      data: {
+        storeId: product.storeId,
+        totalAmount: product.price,
+        status: "COMPLETED", // สมมติว่าจ่ายเงินเรียบร้อยแล้ว
+        affiliateId: affiliateId, // ผูกรหัสคนแนะนำไว้ตรงนี้! ✨
+        items: {
+          create: {
+            productId: product.id,
+            quantity: 1,
+            price: product.price
+          }
+        }
+      }
+    })
+
+    // 3.2 ลดสต็อกลง 1 ชิ้น
+    const currentInventory = product.inventory[0]
+    if (currentInventory && currentInventory.quantity > 0) {
+      await tx.inventory.update({
+        where: { id: currentInventory.id },
+        data: { quantity: currentInventory.quantity - 1 }
+      })
+    }
+  })
+
+  // 4. อัปเดตข้อมูลหน้าเว็บใหม่ แล้วพาลูกค้าไปหน้าขอบคุณ
+  revalidatePath('/dashboard')
+  redirect(`/p/${productId}/success`)
+}
+// ==========================================
+// ฟังก์ชัน 5: ลบสินค้าของตัวเอง
+// ==========================================
+export async function deleteProduct(formData: FormData) {
+  const productId = formData.get('productId') as string
+  
+  // ลบข้อมูลที่ผูกกับสินค้านี้ก่อน (ป้องกัน Error จาก Database Relation)
+  await prisma.inventory.deleteMany({ where: { productId: productId } })
+  await prisma.affiliate.deleteMany({ where: { productId: productId } })
+  
+  // ลบตัวสินค้า
+  await prisma.product.delete({ where: { id: productId } })
+  revalidatePath('/dashboard')
+}
+
+// ==========================================
+// ฟังก์ชัน 6: ลบลิงก์ Affiliate (เลิกโปรโมท)
+// ==========================================
+export async function deleteAffiliateLink(formData: FormData) {
+  const affiliateId = formData.get('affiliateId') as string
+  
+  await prisma.affiliate.delete({ where: { id: affiliateId } })
+  revalidatePath('/dashboard')
+}

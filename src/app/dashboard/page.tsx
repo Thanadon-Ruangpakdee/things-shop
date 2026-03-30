@@ -1,150 +1,119 @@
-import { auth } from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import prisma from '@/lib/db'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { Package, ShoppingCart, DollarSign, Users, Link as LinkIcon, Clock } from 'lucide-react'
 
-export default async function DashboardPage() {
+export default async function DashboardOverview() {
   const { userId } = await auth()
-  if (!userId) redirect('/')
+  if (!userId) redirect('/sign-in')
+  const user = await currentUser();
+  const userName = user?.firstName || "คุณ";
 
-  // 1. ดึงข้อมูลร้านค้าของเรา
-  const store = await prisma.store.findFirst({ where: { ownerId: userId } })
-  if (!store) redirect('/setup')
-
-  // 2. ดึงข้อมูลสินค้าของร้านเรา (ของเดิม)
-  const products = await prisma.product.findMany({
-    where: { storeId: store.id },
-    include: { inventory: true }
-  })
-
-  // 3. ดึงข้อมูลลิงก์ Affiliate ที่เราไปกดรับมา (ส่วนที่เพิ่มใหม่ ✨)
-  const myAffiliates = await prisma.affiliate.findMany({
-    where: { storeId: store.id },
+  // ดึงข้อมูลร้านและรวม Affiliate มาคำนวณ
+  const store = await prisma.store.findFirst({
+    where: { ownerId: userId },
     include: {
-      product: {
-        include: { store: true } // ดึงชื่อร้านเจ้าของสินค้าตัวจริงมาด้วย
-      }
+      products: { include: { inventory: true } },
+      affiliates: true
     }
   })
+  if (!store) redirect('/setup')
 
-  // คำนวณสถิติ
-  const totalProducts = products.length
-  const sharedProducts = products.filter(p => p.isShared).length
+  const allOrders = await prisma.order.findMany({
+    where: { storeId: store.id },
+    include: { affiliate: true },
+    orderBy: { id: 'desc' },
+    take: 8
+  })
+
+  // คำนวณยอดเงินจริง
+  const totalRevenue = allOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+  const affiliateOrders = allOrders.filter(order => order.affiliateId !== null);
+  const totalAffiliateSales = affiliateOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+  
+  // คำนวณคอมมิชชันตาม Rate ที่ตั้งไว้ในระบบ
+  const totalCommission = affiliateOrders.reduce((sum, order) => {
+    const rate = order.affiliate?.commission || 0;
+    return sum + (order.totalAmount * rate);
+  }, 0);
 
   return (
-    <div className="max-w-4xl mx-auto mt-10 p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-900">ร้าน: {store.name}</h1>
-          <p className="text-zinc-500">จัดการสต็อกสินค้าและระบบแชร์ของคุณที่นี่</p>
+    <div className="space-y-8 animate-in fade-in duration-700">
+      <div className="space-y-1">
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Dashboard Overview</p>
+        <h2 className="text-3xl font-black text-slate-800 leading-tight">สวัสดี {userName}, 👋 ยินดีต้อนรับกลับมา</h2>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm transition-all hover:shadow-md">
+          <p className="text-[10px] text-slate-400 font-black uppercase mb-2 text-indigo-600">รายได้รวม</p>
+          <h3 className="text-2xl font-black text-slate-900">฿{totalRevenue.toLocaleString()}</h3>
         </div>
-        <div className="flex gap-3">
-          <Link href="/market" className="bg-white border border-zinc-200 text-zinc-700 px-4 py-2 rounded-lg font-medium hover:bg-zinc-50 transition-colors shadow-sm">
-            🌐 เข้าตลาดกลาง
-          </Link>
-          <Link href="/products/new" className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 shadow-sm">
-            + เพิ่มสินค้าใหม่
-          </Link>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm border-l-4 border-l-indigo-500">
+          <p className="text-[10px] text-indigo-400 font-black uppercase mb-2">ยอดจากตัวแทน</p>
+          <h3 className="text-2xl font-black text-slate-900">฿{totalAffiliateSales.toLocaleString()}</h3>
+        </div>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm border-l-4 border-l-rose-500">
+          <p className="text-[10px] text-rose-400 font-black uppercase mb-2">ค่าคอมฯ ค้างจ่าย</p>
+          <h3 className="text-2xl font-black text-rose-600">฿{totalCommission.toLocaleString()}</h3>
+        </div>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <p className="text-[10px] text-slate-400 font-black uppercase mb-2">ตัวแทนแชร์</p>
+          <h3 className="text-2xl font-black text-slate-900">{store.affiliates.length} ท่าน</h3>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="p-6 bg-white border rounded-xl shadow-sm">
-          <p className="text-zinc-500 text-sm">สินค้าของฉันทั้งหมด</p>
-          <p className="text-2xl font-bold">{totalProducts} ชิ้น</p>
-        </div>
-        <div className="p-6 bg-white border rounded-xl shadow-sm">
-          <p className="text-zinc-500 text-sm">สินค้าที่เปิดแชร์</p>
-          <p className="text-2xl font-bold text-green-600">{sharedProducts} รายการ</p>
-        </div>
-        <div className="p-6 bg-indigo-50 border border-indigo-100 rounded-xl shadow-sm">
-          <p className="text-indigo-600 text-sm font-medium">ลิงก์ Affiliate ของฉัน</p>
-          <p className="text-2xl font-bold text-indigo-700">{myAffiliates.length} ลิงก์</p>
-        </div>
-      </div>
-      
-      {/* ตารางที่ 1: สินค้าของร้านตัวเอง */}
-      <div className="bg-white border rounded-xl shadow-sm overflow-hidden mb-8">
-        <div className="p-6 border-b bg-zinc-50">
-          <h2 className="font-bold text-zinc-900">📦 สินค้าในคลังของคุณ</h2>
-        </div>
-        
-        {products.length === 0 ? (
-          <div className="p-12 text-center text-zinc-400">
-            ยังไม่มีสินค้าในคลัง เริ่มต้นโดยการกดปุ่ม "เพิ่มสินค้าใหม่"
-          </div>
-        ) : (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b text-sm text-zinc-500">
-                <th className="p-4 font-medium">ชื่อสินค้า</th>
-                <th className="p-4 font-medium">ราคา</th>
-                <th className="p-4 font-medium">สต็อก (ชิ้น)</th>
-                <th className="p-4 font-medium">สถานะแชร์</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((product) => (
-                <tr key={product.id} className="border-b hover:bg-zinc-50">
-                  <td className="p-4 font-medium text-zinc-900">{product.name}</td>
-                  <td className="p-4 text-zinc-600">฿{product.price.toLocaleString()}</td>
-                  <td className="p-4 text-zinc-600">
-                    {product.inventory[0]?.quantity || 0}
-                  </td>
-                  <td className="p-4">
-                    {product.isShared ? (
-                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">เปิดแชร์</span>
-                    ) : (
-                      <span className="bg-zinc-100 text-zinc-500 px-2 py-1 rounded-full text-xs font-bold">ส่วนตัว</span>
-                    )}
-                  </td>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        <div className="xl:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <h4 className="font-bold text-slate-800 text-lg mb-8 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-indigo-500" /> ออเดอร์ล่าสุด
+          </h4>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-50">
+                  <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">ORDER ID</th>
+                  <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">SOURCE</th>
+                  <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">ยอดเงิน</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* ตารางที่ 2: ลิงก์ Affiliate ที่ไปเอาของคนอื่นมาขาย ✨ */}
-      <div className="bg-white border rounded-xl shadow-sm overflow-hidden border-indigo-100">
-        <div className="p-6 border-b bg-indigo-50">
-          <h2 className="font-bold text-indigo-900">🔗 สินค้าที่นำมาโปรโมท (Affiliate)</h2>
-        </div>
-        
-        {myAffiliates.length === 0 ? (
-          <div className="p-12 text-center text-zinc-400">
-            ยังไม่มีลิงก์โปรโมท ไปที่ "ตลาดกลาง" เพื่อหาสินค้ามาขายสิ!
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {allOrders.map((order) => (
+                  <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-4 font-mono text-xs text-slate-400">#{order.id.slice(-6)}</td>
+                    <td className="py-4 text-center">
+                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black border ${order.affiliateId ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                        {order.affiliateId ? 'AFFILIATE' : 'DIRECT'}
+                      </span>
+                    </td>
+                    <td className="py-4 text-right font-black text-slate-900">฿{order.totalAmount.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ) : (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b text-sm text-zinc-500 bg-zinc-50">
-                <th className="p-4 font-medium">ชื่อสินค้า</th>
-                <th className="p-4 font-medium">ร้านเจ้าของสต็อก</th>
-                <th className="p-4 font-medium">ส่วนแบ่ง (Commission)</th>
-                <th className="p-4 font-medium">รหัสลิงก์ของคุณ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {myAffiliates.map((aff) => (
-                <tr key={aff.id} className="border-b hover:bg-zinc-50">
-                  <td className="p-4 font-medium text-zinc-900">{aff.product.name}</td>
-                  <td className="p-4 text-zinc-500">{aff.product.store.name}</td>
-                  <td className="p-4 text-green-600 font-bold">{(aff.commission * 100)}%</td>
-                  <td className="p-4">
-                    <code className="bg-zinc-100 text-pink-600 px-2 py-1 rounded text-sm font-mono border">
-                      {aff.refCode}
-                    </code>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+        </div>
 
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm h-fit">
+          <h4 className="font-bold text-slate-800 text-lg mb-8">ตัวจัดการสินค้า</h4>
+          <div className="space-y-6">
+            {store.products.slice(0, 4).map((product) => (
+              <div key={product.id} className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">📦</div>
+                <div className="flex-1">
+                  <h5 className="text-sm font-bold text-slate-800 truncate">{product.name}</h5>
+                  <p className="text-[10px] text-emerald-500 font-bold">สต็อก {product.inventory[0]?.quantity || 0}</p>
+                </div>
+                <p className="text-sm font-black text-slate-900">฿{product.price}</p>
+              </div>
+            ))}
+          </div>
+          <Link href="/dashboard/products" className="mt-8 block text-center py-4 text-[10px] font-black uppercase text-slate-400 bg-slate-50 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all border border-dashed border-slate-200">
+            ดูสินค้าทั้งหมด
+          </Link>
+        </div>
+      </div>
     </div>
   )
 }
