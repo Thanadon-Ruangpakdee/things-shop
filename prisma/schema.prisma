@@ -5,19 +5,20 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // <-- เพิ่มบรรทัดนี้ให้ Prisma ใช้ตอน Push
+  directUrl = env("DIRECT_URL")
 }
 
 model Store {
-  id        String      @id @default(cuid())
-  name      String
-  slug      String      @unique
-  ownerId   String
-  products  Product[]
-  orders    Order[]
-  inventory Inventory[]
-  affiliates Affiliate[] // <-- เพิ่มบรรทัดนี้: ให้รู้ว่าร้านนี้สร้างลิงก์ Affiliate อะไรไปบ้าง
-  createdAt DateTime    @default(now())
+  id         String      @id @default(cuid())
+  name       String
+  slug       String      @unique
+  ownerId    String
+  products   Product[]
+  orders     Order[]
+  inventory  Inventory[]
+  affiliates Affiliate[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @default(now()) @updatedAt // 🟢 เพิ่ม default(now) ป้องกันข้อมูลเก่าพัง
 }
 
 model Product {
@@ -25,12 +26,16 @@ model Product {
   name        String
   description String?
   price       Float
+  category    String?     // 🟢 สำหรับจัดกลุ่มสินค้า (Filter)
+  imageUrl    String?     // 🟢 สำหรับเก็บ URL รูปภาพจาก Supabase Storage
   isShared    Boolean     @default(false)
   storeId     String
   store       Store       @relation(fields: [storeId], references: [id])
   inventory   Inventory[]
   orderItems  OrderItem[]
-  affiliates  Affiliate[] // <-- เพิ่มบรรทัดนี้: ให้รู้ว่าสินค้านี้มีใครเอาไปทำ Affiliate บ้าง
+  affiliates  Affiliate[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @default(now()) @updatedAt // 🟢 เพิ่ม default(now) ป้องกันข้อมูลเก่าพัง
 }
 
 model Inventory {
@@ -46,8 +51,8 @@ model Inventory {
 
 model Affiliate {
   id         String   @id @default(cuid())
-  storeId    String   // <-- เพิ่ม: ไอดีร้านคนที่เอาไปโปรโมท
-  productId  String   // <-- เพิ่ม: ไอดีสินค้าที่เอาไปโปรโมท
+  storeId    String
+  productId  String
   refCode    String   @unique
   commission Float    @default(0.05)
   

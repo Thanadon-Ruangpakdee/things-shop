@@ -1,73 +1,88 @@
 import { auth } from '@clerk/nextjs/server'
-import prisma from '@/lib/db'
+import { db } from '@/lib/db' 
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { deleteAffiliateLink } from '@/app/actions'
+import { deleteAffiliateLink } from "@/app/actions";
+// 🟢 แก้ Path ตรงนี้ให้ตรงกับโฟลเดอร์ src/app/components
+import CopyButton from "@/app/components/CopyButton"; 
 
 export default async function AffiliatesPage() {
   const { userId } = await auth()
   if (!userId) redirect('/')
 
-  const store = await prisma.store.findFirst({ where: { ownerId: userId } })
+  const store = await db.store.findFirst({ where: { ownerId: userId } })
   if (!store) redirect('/setup')
 
-  // ดึงแค่ลิงก์ Affiliate
-  const myAffiliates = await prisma.affiliate.findMany({
+  const myAffiliates = await db.affiliate.findMany({
     where: { storeId: store.id },
     include: {
       product: { include: { store: true } }
     },
+    orderBy: { id: 'desc' }
   })
 
   return (
-    <div className="w-full">
+    <div className="w-full animate-in fade-in duration-500">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-900">🔗 ลิงก์โปรโมทของคุณ</h1>
-          <p className="text-zinc-500">จัดการลิงก์ Affiliate ที่คุณนำมาแชร์เพื่อรับคอมมิชชัน</p>
+          <h1 className="text-3xl font-extrabold text-slate-900">🔗 ลิงก์โปรโมทของคุณ</h1>
+          <p className="text-slate-500">จัดการลิงก์ Affiliate เพื่อรับคอมมิชชัน</p>
         </div>
-        <Link href="/market" className="bg-white border border-zinc-200 text-zinc-700 px-4 py-2 rounded-lg font-medium hover:bg-zinc-50 transition-colors shadow-sm">
-          🌐 เข้าตลาดกลางเพื่อหาของขายเพิ่ม
+        <Link href="/dashboard/market" className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-100">
+          🌐 หาของขายเพิ่ม
         </Link>
       </div>
 
-      <div className="bg-white border rounded-xl shadow-sm overflow-hidden border-pink-100">
+      <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
         {myAffiliates.length === 0 ? (
-          <div className="p-12 text-center text-zinc-400">ยังไม่มีลิงก์โปรโมท ไปหาของมาขายในตลาดกลางกันเถอะ!</div>
+          <div className="p-20 text-center text-slate-400 font-medium">ยังไม่มีลิงก์โปรโมทในขณะนี้</div>
         ) : (
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="border-b text-zinc-500 bg-pink-50">
-                <th className="p-4 font-medium text-pink-900">ชื่อสินค้า</th>
-                <th className="p-4 font-medium text-pink-900">ร้านเจ้าของ</th>
-                <th className="p-4 font-medium text-pink-900">ส่วนแบ่ง</th>
-                <th className="p-4 font-medium text-pink-900">ลิงก์ของคุณ (คลิกเพื่อดูหน้าเว็บ)</th>
-                <th className="p-4 font-medium text-pink-900">จัดการ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {myAffiliates.map((aff) => (
-                <tr key={aff.id} className="border-b hover:bg-zinc-50">
-                  <td className="p-4 font-medium text-zinc-900">{aff.product.name}</td>
-                  <td className="p-4 text-zinc-500">{aff.product.store.name}</td>
-                  <td className="p-4 text-green-600 font-bold">{(aff.commission * 100)}%</td>
-                  <td className="p-4">
-                    <Link href={`/p/${aff.productId}?ref=${aff.refCode}`} target="_blank">
-                      <code className="bg-pink-50 text-pink-600 px-3 py-1.5 rounded-lg font-mono border border-pink-200 hover:bg-pink-100 transition cursor-pointer">
-                        {aff.refCode} ↗
-                      </code>
-                    </Link>
-                  </td>
-                  <td className="p-4">
-                    <form action={deleteAffiliateLink}>
-                      <input type="hidden" name="affiliateId" value={aff.id} />
-                      <button type="submit" className="text-red-500 hover:bg-red-50 px-3 py-1 rounded transition text-xs font-medium">เลิกโปรโมท</button>
-                    </form>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50/50 text-slate-500 text-[11px] uppercase font-bold border-b border-slate-100">
+                  <th className="p-5">สินค้า</th>
+                  <th className="p-5">ร้านเจ้าของ</th>
+                  <th className="p-5">คอมมิชชัน</th>
+                  <th className="p-5">ลิงก์ของคุณ</th>
+                  <th className="p-5 text-center">จัดการ</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {myAffiliates.map((aff) => {
+                  // สร้างลิงก์เต็มสำหรับก๊อปปี้
+                  const promoUrl = `http://localhost:3000/p/${aff.productId}?ref=${aff.refCode}`;
+                  
+                  return (
+                    <tr key={aff.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="p-5 font-bold text-slate-800">{aff.product.name}</td>
+                      <td className="p-5 text-slate-500">{aff.product.store.name}</td>
+                      <td className="p-5 text-emerald-600 font-bold">{(aff.commission * 100)}%</td>
+                      <td className="p-5">
+                        <div className="flex items-center gap-3">
+                          <Link href={promoUrl} target="_blank" className="hover:opacity-80 transition">
+                            <code className="bg-indigo-50 text-indigo-700 px-3 py-2 rounded-xl font-mono text-xs border border-indigo-100">
+                              {aff.refCode} ↗
+                            </code>
+                          </Link>
+                          {/* 🟢 เรียกใช้ปุ่มก๊อปปี้ */}
+                          <CopyButton textToCopy={promoUrl} />
+                        </div>
+                      </td>
+                      <td className="p-5 text-center">
+                        <form action={deleteAffiliateLink}>
+                          <input type="hidden" name="affiliateId" value={aff.id} />
+                          <button type="submit" className="text-red-400 hover:text-red-600 font-bold text-xs p-2 hover:bg-red-50 rounded-lg transition">
+                            เลิกโปรโมท
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
