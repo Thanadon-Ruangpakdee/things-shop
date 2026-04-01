@@ -5,7 +5,13 @@ import { db as prisma } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 
-// --- 1. สร้างร้านค้า ---
+/**
+ * ==========================================
+ * 🏬 SECTION 1: STORE ACTIONS
+ * ==========================================
+ */
+
+// สร้างร้านค้าใหม่ (ใช้ตอน Setup ครั้งแรก)
 export async function createStore(formData: FormData) {
   const { userId } = await auth()
   if (!userId) throw new Error('Unauthorized')
@@ -24,10 +30,16 @@ export async function createStore(formData: FormData) {
   })
 
   revalidatePath('/dashboard')
-  redirect('/dashboard')
+  redirect('/dashboard') // ตรงนี้ยังต้องมีเพราะเป็นการเปลี่ยนหน้าจาก Setup ไป Dashboard
 }
 
-// --- 2. เพิ่มสินค้าใหม่ ---
+/**
+ * ==========================================
+ * 📦 SECTION 2: PRODUCT MANAGEMENT
+ * ==========================================
+ */
+
+// เพิ่มสินค้าใหม่
 export async function addProduct(formData: FormData) {
   const { userId } = await auth()
   if (!userId) throw new Error("Unauthorized")
@@ -43,7 +55,7 @@ export async function addProduct(formData: FormData) {
   const imageUrl = formData.get('imageUrl') as string
   const price = parseFloat(formData.get('price') as string)
   const quantity = parseInt(formData.get('quantity') as string) || 0
-  const isShared = formData.get('isShared') === 'on'
+  const isShared = true 
 
   await prisma.product.create({
     data: {
@@ -63,11 +75,16 @@ export async function addProduct(formData: FormData) {
     }
   })
 
+  // 🟢 สั่ง Refresh ทุกหน้าที่มีข้อมูลสินค้า
   revalidatePath('/dashboard/products')
-  redirect('/dashboard/products')
+  revalidatePath('/dashboard/product-stock')
+  revalidatePath('/dashboard') 
+
+  // ❌ ลบ redirect('/dashboard/products') ออกแล้วเพื่อน! 
+  // เพื่อให้ try...catch ใน Form ทำงานสำเร็จและขึ้น Toast สีเขียว
 }
 
-// --- 3. แก้ไขสินค้า (รองรับ Stock) ---
+// แก้ไขสินค้า
 export async function updateProduct(productId: string, formData: FormData) {
   const { userId } = await auth()
   if (!userId) throw new Error("Unauthorized")
@@ -99,24 +116,30 @@ export async function updateProduct(productId: string, formData: FormData) {
   })
 
   revalidatePath('/dashboard/products')
+  revalidatePath('/dashboard/product-stock')
+  revalidatePath('/dashboard')
 }
 
-// --- 4. ลบสินค้า ---
+// ลบสินค้า
 export async function deleteProduct(productId: string) {
   try {
-    await prisma.inventory.deleteMany({ where: { productId } })
-    await prisma.affiliate.deleteMany({ where: { productId } })
-    await prisma.orderItem.deleteMany({ where: { productId } })
-    await prisma.product.delete({ where: { id: productId } })
+    await prisma.$transaction([
+      prisma.inventory.deleteMany({ where: { productId } }),
+      prisma.affiliate.deleteMany({ where: { productId } }),
+      prisma.orderItem.deleteMany({ where: { productId } }),
+      prisma.product.delete({ where: { id: productId } })
+    ])
     
     revalidatePath('/dashboard/products')
+    revalidatePath('/dashboard/product-stock')
+    revalidatePath('/dashboard')
   } catch (error) {
     console.error("Delete failed:", error)
     throw new Error("Failed to delete product")
   }
 }
 
-// --- 5. คัดลอกสินค้า (ใช้ Transaction เพื่อความชัวร์) ---
+// คัดลอกสินค้า
 export async function duplicateProduct(productId: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -128,7 +151,6 @@ export async function duplicateProduct(productId: string) {
 
   if (!original) throw new Error("Product not found");
 
-  // 🟢 ใช้ Transaction เพื่อให้ได้ทั้ง Product และ Inventory พร้อมกัน
   await prisma.$transaction(async (tx) => {
     await tx.product.create({
       data: {
@@ -150,9 +172,87 @@ export async function duplicateProduct(productId: string) {
   });
 
   revalidatePath('/dashboard/products');
+  revalidatePath('/dashboard/product-stock');
 }
 
-// --- 6. ระบบ Affiliate ---
+/**
+ * ==========================================
+ * 🛒 SECTION 3: ORDER & SALES MANAGEMENT
+ * ==========================================
+ */
+
+// อัปเดตสถานะออเดอร์
+export async function updateOrderStatus(orderId: string, newStatus: string) {
+  const { userId } = await auth()
+  if (!userId) throw new Error("Unauthorized")
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: { status: newStatus }
+  })
+
+  revalidatePath('/dashboard/orders')
+  revalidatePath('/dashboard') 
+}
+
+// สร้างออเดอร์ใหม่ (ฝั่งลูกค้าสั่งซื้อ)
+export async function createOrder(formData: FormData) {
+  const productId = formData.get('productId') as string
+  const refCode = formData.get('refCode') as string
+
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    include: { inventory: true }
+  })
+  
+  if (!product) throw new Error("Product not found")
+
+  if (product.inventory[0]?.quantity <= 0) {
+    throw new Error("Out of stock")
+  }
+
+  let affiliateId = null
+  if (refCode) {
+    const affiliate = await prisma.affiliate.findUnique({ where: { refCode } })
+    if (affiliate) affiliateId = affiliate.id
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.order.create({
+      data: {
+        storeId: product.storeId,
+        totalAmount: product.price,
+        status: "PENDING", 
+        affiliateId: affiliateId,
+        items: {
+          create: { productId: product.id, quantity: 1, price: product.price }
+        }
+      }
+    })
+
+    const currentInventory = product.inventory[0]
+    if (currentInventory) {
+      await tx.inventory.update({
+        where: { id: currentInventory.id },
+        data: { quantity: currentInventory.quantity - 1 }
+      })
+    }
+  })
+
+  revalidatePath('/dashboard/orders')
+  revalidatePath('/dashboard/product-stock')
+  revalidatePath('/dashboard')
+  
+  // ตรงนี้ยังต้อง redirect เพราะลูกค้าต้องไปหน้า Success หลังสั่งซื้อ
+  redirect(`/p/${productId}/success`)
+}
+
+/**
+ * ==========================================
+ * 🤝 SECTION 4: AFFILIATE SYSTEM
+ * ==========================================
+ */
+
 export async function createAffiliate(formData: FormData) {
   const { userId } = await auth()
   if (!userId) throw new Error("Unauthorized")
@@ -167,7 +267,6 @@ export async function createAffiliate(formData: FormData) {
     data: { storeId: myStore.id, productId, refCode }
   })
 
-  // 🟢 เปลี่ยนจาก /dashboard เป็นหน้ารวมลิงก์ที่เราทำไว้ (ถ้ามี)
   revalidatePath('/dashboard/affiliates') 
   redirect('/dashboard/affiliates')
 }
@@ -176,47 +275,4 @@ export async function deleteAffiliateLink(formData: FormData) {
   const affiliateId = formData.get('affiliateId') as string;
   await prisma.affiliate.delete({ where: { id: affiliateId } });
   revalidatePath('/dashboard/affiliates');
-}
-
-// --- 7. ระบบคำสั่งซื้อ ---
-export async function createOrder(formData: FormData) {
-  const productId = formData.get('productId') as string
-  const refCode = formData.get('refCode') as string
-
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-    include: { inventory: true }
-  })
-  if (!product) throw new Error("Product not found")
-
-  let affiliateId = null
-  if (refCode) {
-    const affiliate = await prisma.affiliate.findUnique({ where: { refCode } })
-    if (affiliate) affiliateId = affiliate.id
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.order.create({
-      data: {
-        storeId: product.storeId,
-        totalAmount: product.price,
-        status: "COMPLETED",
-        affiliateId: affiliateId,
-        items: {
-          create: { productId: product.id, quantity: 1, price: product.price }
-        }
-      }
-    })
-
-    const currentInventory = product.inventory[0]
-    if (currentInventory && currentInventory.quantity > 0) {
-      await tx.inventory.update({
-        where: { id: currentInventory.id },
-        data: { quantity: currentInventory.quantity - 1 }
-      })
-    }
-  })
-
-  revalidatePath('/dashboard')
-  redirect(`/p/${productId}/success`)
 }
