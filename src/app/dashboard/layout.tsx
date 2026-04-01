@@ -20,12 +20,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // 🟢 แก้ไขตรงนี้ครับเพื่อน เพิ่ม Order Lists เข้าไป
   const menuItems = [
-    { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/dashboard/products", icon: Package, label: "Products" }, // เปลี่ยนเป็น Package จะดูเข้ากว่า
-    { href: "/dashboard/orders", icon: ShoppingCart, label: "Order Lists" }, // 👈 เพิ่มปุ่มนี้เข้าไป!
-    { href: "/dashboard/affiliates", icon: Users, label: "Affiliates" },
-    { href: "/dashboard/market", icon: BarChart3, label: "Market" },
-  ];
+  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/dashboard/products", icon: Package, label: "Products" },
+  { href: "/dashboard/orders", icon: ShoppingCart, label: "Order Lists" },
+  { href: "/dashboard/product-stock", icon: Package, label: "Product Stock" }, // 🟢 เปลี่ยนตรงนี้!
+  { href: "/dashboard/affiliates", icon: Users, label: "Affiliates" },
+];
 
   return (
     <div className="flex h-screen bg-[#F5F6FA] font-sans">
