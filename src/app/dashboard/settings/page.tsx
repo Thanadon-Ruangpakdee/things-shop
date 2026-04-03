@@ -1,12 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { Settings, Globe, Palette, Bell, Shield, Check } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Globe, Palette, Check } from "lucide-react";
 import { toast } from "sonner";
+import { getDictionary } from "@/lib/get-dictionary";
 
 export default function SettingsPage() {
   const [lang, setLang] = useState("TH");
-  const [primaryColor, setPrimaryColor] = useState("#4f46e5"); // Indigo-600
+  const [primaryColor, setPrimaryColor] = useState("#4f46e5");
+  const [dict, setDict] = useState<any>(null);
+
+  // โหลดค่าภาษาและสีจากเครื่อง
+  useEffect(() => {
+    const savedLang = localStorage.getItem("language") || "TH";
+    const savedColor = localStorage.getItem("theme-color") || "#4f46e5";
+    
+    setLang(savedLang);
+    setPrimaryColor(savedColor);
+    setDict(getDictionary(savedLang));
+  }, []);
 
   const colors = [
     { name: "Indigo", value: "#4f46e5" },
@@ -16,28 +28,42 @@ export default function SettingsPage() {
     { name: "Slate", value: "#0f172a" },
   ];
 
-  const handleSave = () => {
-    toast.success("บันทึกการตั้งค่าเรียบร้อยแล้วเพื่อน! ✨");
+  const handleColorChange = (colorValue: string) => {
+    setPrimaryColor(colorValue);
+    document.documentElement.style.setProperty('--primary', colorValue);
+    localStorage.setItem("theme-color", colorValue);
   };
+
+  // 🟢 ฟังก์ชันเปลี่ยนภาษา
+  const handleLangChange = (newLang: string) => {
+    setLang(newLang);
+    localStorage.setItem("language", newLang);
+    // รีโหลดหน้าเพื่อให้ Layout อัปเดตตามทันที
+    window.location.reload();
+  };
+
+  const handleSave = () => {
+    toast.success(dict?.settings.toast_success);
+  };
+
+  if (!dict) return null;
 
   return (
     <div className="max-w-4xl space-y-10 animate-in fade-in duration-700">
       <div>
-        <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Settings</h1>
-        <p className="text-slate-500 font-bold mt-2">จัดการการตั้งค่าระบบและรูปลักษณ์ของ Dashboard</p>
+        <h1 className="text-4xl font-black text-slate-900 tracking-tighter">{dict.settings.title}</h1>
+        <p className="text-slate-500 font-bold mt-2">{dict.settings.desc}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-8">
-        
-        {/* 🟢 ส่วนที่ 1: Globalization (Language) */}
         <section className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm space-y-6">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+            <div className="p-3 bg-primary/10 text-primary rounded-2xl transition-colors">
               <Globe size={24} />
             </div>
             <div>
-              <h3 className="font-black text-xl text-slate-900">Language & Region</h3>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">เลือกภาษาที่คุณถนัด</p>
+              <h3 className="font-black text-xl text-slate-900">{dict.settings.lang_title}</h3>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{dict.settings.lang_desc}</p>
             </div>
           </div>
 
@@ -45,10 +71,10 @@ export default function SettingsPage() {
             {["TH", "EN"].map((l) => (
               <button
                 key={l}
-                onClick={() => setLang(l)}
+                onClick={() => handleLangChange(l)}
                 className={`flex-1 py-4 rounded-2xl font-black text-sm transition-all border-2 ${
                   lang === l 
-                    ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100" 
+                    ? "bg-primary border-primary text-white shadow-lg shadow-primary/20" 
                     : "bg-slate-50 border-slate-50 text-slate-400 hover:border-slate-200"
                 }`}
               >
@@ -58,15 +84,14 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* 🟢 ส่วนที่ 2: Appearance (Theme Color) */}
         <section className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm space-y-6">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+            <div className="p-3 bg-primary/10 text-primary rounded-2xl transition-colors">
               <Palette size={24} />
             </div>
             <div>
-              <h3 className="font-black text-xl text-slate-900">Appearance</h3>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">ปรับแต่งสีสันของ Dashboard</p>
+              <h3 className="font-black text-xl text-slate-900">{dict.settings.appearance_title}</h3>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{dict.settings.appearance_desc}</p>
             </div>
           </div>
 
@@ -74,7 +99,7 @@ export default function SettingsPage() {
             {colors.map((c) => (
               <button
                 key={c.name}
-                onClick={() => setPrimaryColor(c.value)}
+                onClick={() => handleColorChange(c.value)}
                 className="flex flex-col items-center gap-3 p-4 rounded-3xl hover:bg-slate-50 transition-all group"
               >
                 <div 
@@ -83,7 +108,7 @@ export default function SettingsPage() {
                 >
                   {primaryColor === c.value && <Check className="text-white" size={20} />}
                 </div>
-                <span className={`text-[10px] font-black uppercase tracking-widest ${primaryColor === c.value ? "text-slate-900" : "text-slate-400"}`}>
+                <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${primaryColor === c.value ? "text-primary" : "text-slate-400"}`}>
                   {c.name}
                 </span>
               </button>
@@ -91,16 +116,14 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* 🟢 ปุ่ม Save All */}
         <div className="flex justify-end pt-4">
           <button 
             onClick={handleSave}
-            className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black text-sm hover:bg-indigo-600 transition-all shadow-xl active:scale-95 flex items-center gap-2"
+            className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black text-sm hover:bg-primary transition-all shadow-xl active:scale-95 flex items-center gap-2"
           >
-            บันทึกการเปลี่ยนแปลง
+            {dict.settings.save_btn}
           </button>
         </div>
-
       </div>
     </div>
   );

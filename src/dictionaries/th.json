@@ -1,0 +1,25 @@
+{
+  "navigation": {
+    "dashboard": "แดชบอร์ด",
+    "products": "สินค้า",
+    "orders": "รายการสั่งซื้อ",
+    "stock": "สต็อกสินค้า",
+    "affiliates": "ตัวแทน",
+    "settings": "ตั้งค่า",
+    "logout": "ออกจากระบบ"
+  },
+  "dashboard": {
+    "title": "ภาพรวมระบบ",
+    "welcome": "ยินดีต้อนรับกลับมานะเพื่อน!",
+    "total_revenue": "รายได้ทั้งหมด",
+    "pending_orders": "รอตรวจสอบ"
+  },
+  "settings": {
+    "title": "การตั้งค่า",
+    "lang_title": "ภาษาและภูมิภาค",
+    "lang_desc": "เลือกภาษาที่คุณถนัด",
+    "appearance_title": "รูปลักษณ์",
+    "appearance_desc": "ปรับแต่งสีสันของ Dashboard",
+    "save_btn": "บันทึกการเปลี่ยนแปลง"
+  }
+}

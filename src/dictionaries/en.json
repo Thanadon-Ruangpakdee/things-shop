@@ -1,0 +1,25 @@
+{
+  "navigation": {
+    "dashboard": "Dashboard",
+    "products": "Products",
+    "orders": "Order Lists",
+    "stock": "Product Stock",
+    "affiliates": "Affiliates",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "dashboard": {
+    "title": "Dashboard Overview",
+    "welcome": "Welcome back, buddy!",
+    "total_revenue": "Total Revenue",
+    "pending_orders": "Pending"
+  },
+  "settings": {
+    "title": "Settings",
+    "lang_title": "Language & Region",
+    "lang_desc": "Choose your preferred language",
+    "appearance_title": "Appearance",
+    "appearance_desc": "Customize your dashboard colors",
+    "save_btn": "Save Changes"
+  }
+}
